@@ -3,11 +3,14 @@ import CameraView from '../components/CameraView.jsx'
 import SignRecognition from '../components/SignRecognition.jsx'
 import VoiceOutput from '../components/VoiceOutput.jsx'
 import { useCamera } from '../hooks/useCamera.js'
+import SignDatasetRecorder from '../components/SignDatasetRecorder.jsx'
 
 const SIGNS = ['HELP', 'PAIN', 'WATER', 'BATHROOM', 'FIRE']
 
 export default function Home() {
   const { videoRef, status: cameraStatus, error: cameraError } = useCamera()
+  const [landmarks, setLandmarks] = useState(null)
+  const [primaryLandmarks, setPrimaryLandmarks] = useState(null)
   const [simulatedSign, setSimulatedSign] = useState(null)
   const [detectedSign, setDetectedSign] = useState(null)
   const [confidence, setConfidence] = useState(0)
@@ -21,7 +24,12 @@ export default function Home() {
           <h1 className="text-base font-semibold">Camera</h1>
           <div className="text-xs text-slate-400">Allow camera permission</div>
         </div>
-        <CameraView videoRef={videoRef} status={cameraStatus} error={cameraError} />
+        <CameraView
+          videoRef={videoRef}
+          status={cameraStatus}
+          error={cameraError}
+          landmarks={landmarks}
+        />
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
@@ -75,8 +83,11 @@ export default function Home() {
               setDetectedSign(result.sign)
               setConfidence(result.confidence)
             }}
+            onLandmarks={setLandmarks}
+            onPrimaryLandmarks={setPrimaryLandmarks}
             disabled={Boolean(simulatedSign)}
           />
+          <SignDatasetRecorder primaryLandmarks={primaryLandmarks} />
           <VoiceOutput sign={activeSign} />
         </div>
       </section>

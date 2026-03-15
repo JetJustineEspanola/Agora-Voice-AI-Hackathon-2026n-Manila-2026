@@ -1,7 +1,8 @@
 import { Router } from 'express'
-import { recognizeSign } from '../controllers/signController.js'
+import { getSignModel, recognizeSign, trainSignModel } from '../controllers/signController.js'
 
 export const signRouter = Router()
 
 signRouter.post('/recognize-sign', recognizeSign)
-
+signRouter.get('/sign-model', getSignModel)
+signRouter.post('/sign-model/train', trainSignModel)

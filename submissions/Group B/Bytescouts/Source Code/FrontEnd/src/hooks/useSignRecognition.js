@@ -1,32 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Hands } from '@mediapipe/hands'
-import { Camera } from '@mediapipe/camera_utils'
-import { api } from '../lib/api.js'
+import { classifyLandmarksRuleBased, createHandsTracker, pickPrimaryHand } from '../lib/sign/index.js'
 
-function buildHands() {
-  const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-  })
-
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.6,
-  })
-
-  return hands
-}
-
-export function useSignRecognition({ videoRef, enabled }) {
+export function useSignRecognition({ videoRef, enabled, classifier }) {
   const [status, setStatus] = useState('idle')
-  const [lastResult, setLastResult] = useState({ sign: null, confidence: 0 })
-  const [landmarks, setLandmarks] = useState(null)
-  const hands = useMemo(() => buildHands(), [])
+  const [prediction, setPrediction] = useState({ sign: null, confidence: 0 })
+  const [handsLandmarks, setHandsLandmarks] = useState([])
+  const [primaryLandmarks, setPrimaryLandmarks] = useState(null)
+  const tracker = useMemo(() => createHandsTracker({ maxNumHands: 2 }), [])
 
   useEffect(() => {
     if (!enabled) {
       setStatus('disabled')
+      setPrediction({ sign: null, confidence: 0 })
+      setHandsLandmarks([])
+      setPrimaryLandmarks(null)
+      tracker.stop()
       return
     }
 
@@ -34,45 +22,31 @@ export function useSignRecognition({ videoRef, enabled }) {
     if (!video) return
 
     let cancelled = false
-    let camera = null
     let lastSentAt = 0
 
-    hands.onResults(async (results) => {
+    tracker.setOnResults((results) => {
       if (cancelled) return
-      const lms = results.multiHandLandmarks?.[0] ?? null
-      setLandmarks(lms)
-
-      if (!lms) {
-        setLastResult({ sign: null, confidence: 0 })
-        return
-      }
-
       const now = Date.now()
       if (now - lastSentAt < 250) return
       lastSentAt = now
 
-      try {
-        const resp = await api.post('/api/recognize-sign', { landmarks: lms })
-        if (cancelled) return
-        setLastResult(resp.data)
-      } catch {
-        if (cancelled) return
-        setLastResult((prev) => prev)
+      const all = results?.multiHandLandmarks ?? []
+      setHandsLandmarks(all)
+
+      const { primaryLandmarks } = pickPrimaryHand(results)
+      setPrimaryLandmarks(primaryLandmarks)
+      if (!primaryLandmarks) {
+        setPrediction({ sign: null, confidence: 0 })
+        return
       }
+
+      const fn = classifier ?? classifyLandmarksRuleBased
+      setPrediction(fn(primaryLandmarks))
     })
 
     async function start() {
       setStatus('starting')
-
-      camera = new Camera(video, {
-        onFrame: async () => {
-          await hands.send({ image: video })
-        },
-        width: 640,
-        height: 360,
-      })
-
-      await camera.start()
+      await tracker.start(video)
       if (!cancelled) setStatus('running')
     }
 
@@ -82,14 +56,9 @@ export function useSignRecognition({ videoRef, enabled }) {
 
     return () => {
       cancelled = true
-      try {
-        camera?.stop()
-      } catch {
-        // no-op
-      }
+      tracker.stop()
     }
-  }, [enabled, hands, videoRef])
+  }, [classifier, enabled, tracker, videoRef])
 
-  return { status, lastResult, landmarks }
+  return { status, prediction, handsLandmarks, primaryLandmarks }
 }
-

@@ -1,4 +1,6 @@
-import { RtcTokenBuilder, RtcRole } from 'agora-token'
+import agoraToken from 'agora-token'
+
+const { RtcTokenBuilder, RtcRole } = agoraToken
 
 export function buildRtcToken({ appId, appCertificate, channel, uid, role, expiresInSeconds }) {
   const now = Math.floor(Date.now() / 1000)
@@ -8,4 +10,3 @@ export function buildRtcToken({ appId, appCertificate, channel, uid, role, expir
 }
 
 export { RtcRole }
-
