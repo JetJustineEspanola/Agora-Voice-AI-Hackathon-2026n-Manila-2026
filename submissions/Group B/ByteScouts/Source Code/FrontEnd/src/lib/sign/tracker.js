@@ -1,28 +1,33 @@
 import { Hands } from '@mediapipe/hands'
 import { Camera } from '@mediapipe/camera_utils'
 
-export function createHandsTracker(options) {
+export function createHandsTracker(options = {}) {
+  // Use a fixed version CDN URL to avoid "Module.arguments" runtime errors 
+  // that occur with newer WASM binaries when loaded via generic CDN links.
   const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
+    },
   })
 
   hands.setOptions({
-    maxNumHands: options?.maxNumHands ?? 2,
-    modelComplexity: options?.modelComplexity ?? 1,
-    minDetectionConfidence: options?.minDetectionConfidence ?? 0.6,
-    minTrackingConfidence: options?.minTrackingConfidence ?? 0.6,
+    maxNumHands: options.maxNumHands ?? 2,
+    modelComplexity: options.modelComplexity ?? 1,
+    minDetectionConfidence: options.minDetectionConfidence ?? 0.5,
+    minTrackingConfidence: options.minTrackingConfidence ?? 0.5,
   })
 
   let camera = null
   let disposed = false
+  let isRunning = false
 
   const state = {
     onResults: null,
   }
 
   hands.onResults((results) => {
-    if (disposed) return
-    state.onResults?.(results)
+    if (disposed || !isRunning) return
+    if (state.onResults) state.onResults(results)
   })
 
   async function start(videoEl) {
@@ -30,21 +35,32 @@ export function createHandsTracker(options) {
     if (disposed) throw new Error('Tracker disposed')
     if (camera) return
 
+    isRunning = true
+
+    // Initialize Camera Utils
     camera = new Camera(videoEl, {
       onFrame: async () => {
-        await hands.send({ image: videoEl })
+        if (!isRunning || disposed) return
+        try {
+          await hands.send({ image: videoEl })
+        } catch (err) {
+          console.error('[Tracker] Send error:', err)
+        }
       },
-      width: options?.width ?? 640,
-      height: options?.height ?? 360,
+      width: options.width ?? 640,
+      height: options.height ?? 360,
     })
 
     await camera.start()
   }
 
   function stop() {
+    isRunning = false
     if (!camera) return
     try {
       camera.stop()
+    } catch (err) {
+      console.warn('[Tracker] Stop error:', err)
     } finally {
       camera = null
     }
@@ -53,6 +69,9 @@ export function createHandsTracker(options) {
   function dispose() {
     disposed = true
     stop()
+    try {
+      hands.close()
+    } catch (e) { /* ignore */ }
   }
 
   return {
