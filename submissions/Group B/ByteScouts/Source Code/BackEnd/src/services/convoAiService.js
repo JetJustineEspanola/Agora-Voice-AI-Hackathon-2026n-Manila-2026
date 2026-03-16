@@ -79,3 +79,17 @@ export async function speakConvoAiAgent({ appId, agentId, text }) {
   return resp.data
 }
 
+export async function stopConvoAiAgent({ appId, agentId }) {
+  const url = `${baseUrl}/${appId}/agents/${agentId}/leave`
+  const headers = {
+    Authorization: buildBasicAuthHeader(),
+    'Content-Type': 'application/json',
+  }
+
+  const payload = {}
+
+  const resp = await axios.post(url, payload, { headers })
+  return resp.data
+}
+
+
